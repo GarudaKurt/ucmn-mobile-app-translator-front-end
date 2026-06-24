@@ -4,6 +4,7 @@ import {
   useAudioRecorder,
   useAudioRecorderState,
 } from "expo-audio";
+import * as Speech from "expo-speech";
 import React, { useEffect, useRef, useState } from "react";
 import {
   Animated,
@@ -119,6 +120,16 @@ export default function HomeScreen() {
 
       const result = await response.json();
 
+      if (result.success) {
+        setTranscript(result.transcript);
+
+        Speech.speak(result.transcript, {
+          language: "fil-PH",
+          pitch: 1.0,
+          rate: 0.9,
+        });
+      }
+
       console.log(result);
     } catch (error) {
       console.error(error);
@@ -140,6 +151,31 @@ export default function HomeScreen() {
     }
   };
 
+  const speakTranscript = () => {
+    if (!transcript.trim()) return;
+
+    Speech.speak(transcript, {
+      language: "en-US",
+      pitch: 1.0,
+      rate: 0.9,
+    });
+  };
+
+  useEffect(() => {
+    if (!transcript.trim()) return;
+
+    Speech.stop();
+
+    Speech.speak(transcript, {
+      language: "fil-PH",
+      pitch: 1.0,
+      rate: 0.9,
+    });
+  }, [transcript]);
+
+  const stopSpeaking = () => {
+    Speech.stop();
+  };
   const fetchTranscript = async () => {
     try {
       const response = await fetch(API_URL);
