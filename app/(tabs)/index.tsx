@@ -7,6 +7,7 @@ import {
 import * as Speech from "expo-speech";
 import React, { useEffect, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   Animated,
   Dimensions,
   Easing,
@@ -58,12 +59,89 @@ function WaveformVisualizer({ isRecording }: { isRecording: boolean }) {
   );
 }
 
+// Small pill that reflects the state of the last upload/transcribe API
+// call: a spinner while it's in flight, then a check / X once it settles
+// (which then fades back to hidden).
+type ApiStatus = "idle" | "loading" | "success" | "error";
+
+function ApiStatusPill({ status }: { status: ApiStatus }) {
+  const opacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (status === "idle") {
+      Animated.timing(opacity, {
+        toValue: 0,
+        duration: 250,
+        useNativeDriver: true,
+      }).start();
+    } else {
+      opacity.setValue(1);
+    }
+  }, [status]);
+
+  if (status === "idle") return null;
+
+  if (status === "loading") {
+    return (
+      <Animated.View
+        style={[styles.apiPill, styles.apiPillLoading, { opacity }]}
+      >
+        <ActivityIndicator size="small" color="#C4BFFF" />
+        <Text style={[styles.apiPillText, styles.apiPillTextLoading]}>
+          Uploading…
+        </Text>
+      </Animated.View>
+    );
+  }
+
+  const isSuccess = status === "success";
+
+  return (
+    <Animated.View
+      style={[
+        styles.apiPill,
+        isSuccess ? styles.apiPillSuccess : styles.apiPillError,
+        { opacity },
+      ]}
+    >
+      <Text style={styles.apiPillIcon}>{isSuccess ? "✓" : "✕"}</Text>
+      <Text
+        style={[
+          styles.apiPillText,
+          isSuccess ? styles.apiPillTextSuccess : styles.apiPillTextError,
+        ]}
+      >
+        {isSuccess ? "Synced" : "Failed"}
+      </Text>
+    </Animated.View>
+  );
+}
+
 export default function HomeScreen() {
   const [isRecording, setIsRecording] = useState(false);
   const [transcript, setTranscript] = useState("");
   const [duration, setDuration] = useState(0);
   const pulseAnim = useRef(new Animated.Value(1)).current;
-  const API_URL = "http://192.168.1.3:5000/api/transcript";
+  const API_URL = "http://192.168.1.3:5000/api/transcript"; // URL at UC Testing
+
+  // --- API status indicators ---
+  // Result of the last upload/transcribe request. "loading" while the
+  // request is in flight, then "success"/"error" (transient, auto-hides).
+  const [apiStatus, setApiStatus] = useState<ApiStatus>("idle");
+  const apiStatusTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Whether the polling fetch to the transcript endpoint is currently reachable.
+  const [isConnected, setIsConnected] = useState(true);
+
+  const startApiRequest = () => {
+    if (apiStatusTimeout.current) clearTimeout(apiStatusTimeout.current);
+    setApiStatus("loading");
+  };
+
+  const flashApiStatus = (status: "success" | "error") => {
+    if (apiStatusTimeout.current) clearTimeout(apiStatusTimeout.current);
+    setApiStatus(status);
+    apiStatusTimeout.current = setTimeout(() => setApiStatus("idle"), 3000);
+  };
 
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
 
@@ -95,6 +173,8 @@ export default function HomeScreen() {
     }
   };
   const uploadRecording = async (audioUri: string) => {
+    startApiRequest();
+
     try {
       const formData = new FormData();
 
@@ -103,7 +183,7 @@ export default function HomeScreen() {
         name: "recording.m4a",
         type: "audio/m4a",
       } as any);
-
+      // need pud update ang upload response
       const response = await fetch("http://192.168.1.3:5000/api/upload", {
         method: "POST",
         body: formData,
@@ -115,6 +195,8 @@ export default function HomeScreen() {
         console.log("SERVER ERROR:");
         console.log(errorText);
 
+        flashApiStatus("error");
+
         return;
       }
 
@@ -123,16 +205,21 @@ export default function HomeScreen() {
       if (result.success) {
         setTranscript(result.transcript);
 
+        flashApiStatus("success");
+
         Speech.speak(result.transcript, {
           language: "fil-PH",
           pitch: 1.0,
           rate: 0.9,
         });
+      } else {
+        flashApiStatus("error");
       }
 
       console.log(result);
     } catch (error) {
       console.error(error);
+      flashApiStatus("error");
     }
   };
   const stopRecording = async () => {
@@ -183,8 +270,10 @@ export default function HomeScreen() {
       if (data.success) {
         setTranscript(data.transcript);
       }
+      setIsConnected(true);
     } catch (error) {
       console.error("Failed to fetch transcript:", error);
+      setIsConnected(false);
     }
   };
 
@@ -253,6 +342,7 @@ export default function HomeScreen() {
 
       setDuration(0);
       setTranscript("");
+      setApiStatus("idle");
 
       await startRecording();
     } else {
@@ -268,17 +358,25 @@ export default function HomeScreen() {
         <View>
           <Text style={styles.headerTitle}>Transcribe</Text>
         </View>
-        <View
-          style={[styles.statusBadge, isRecording && styles.statusBadgeLive]}
-        >
+        <View style={styles.headerRight}>
+          {!isConnected && (
+            <View style={styles.connectionBadge}>
+              <Text style={styles.connectionIcon}>⚠</Text>
+              <Text style={styles.connectionText}>OFFLINE</Text>
+            </View>
+          )}
           <View
-            style={[styles.statusDot, isRecording && styles.statusDotLive]}
-          />
-          <Text
-            style={[styles.statusText, isRecording && styles.statusTextLive]}
+            style={[styles.statusBadge, isRecording && styles.statusBadgeLive]}
           >
-            {isRecording ? "LIVE" : "READY"}
-          </Text>
+            <View
+              style={[styles.statusDot, isRecording && styles.statusDotLive]}
+            />
+            <Text
+              style={[styles.statusText, isRecording && styles.statusTextLive]}
+            >
+              {isRecording ? "LIVE" : "READY"}
+            </Text>
+          </View>
         </View>
       </View>
 
@@ -311,7 +409,10 @@ export default function HomeScreen() {
       {/* Transcript */}
       <View style={styles.transcriptCard}>
         <View style={styles.transcriptHeader}>
-          <Text style={styles.transcriptLabel}>TRANSCRIPT</Text>
+          <View style={styles.transcriptHeaderLeft}>
+            <Text style={styles.transcriptLabel}>TRANSCRIPT</Text>
+            <ApiStatusPill status={apiStatus} />
+          </View>
           {transcript.length > 0 && (
             <TouchableOpacity onPress={clearTranscript}>
               <Text style={styles.clearBtn}>Clear</Text>
@@ -360,6 +461,32 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     letterSpacing: -0.5,
     marginTop: 8,
+  },
+  headerRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  connectionBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#2A1420",
+    borderRadius: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: "#FF4757",
+  },
+  connectionIcon: {
+    fontSize: 10,
+    color: "#FF4757",
+  },
+  connectionText: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "#FF4757",
+    letterSpacing: 1,
   },
   statusBadge: {
     flexDirection: "row",
@@ -493,6 +620,11 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: "#1E2440",
   },
+  transcriptHeaderLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
   transcriptLabel: {
     fontSize: 10,
     letterSpacing: 2,
@@ -529,5 +661,46 @@ const styles = StyleSheet.create({
     color: "#E0DDFF",
     lineHeight: 26,
     letterSpacing: 0.2,
+  },
+
+  // API status pill (shown next to TRANSCRIPT label)
+  apiPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderWidth: 1,
+  },
+  apiPillLoading: {
+    backgroundColor: "#161B33",
+    borderColor: "#6C63FF",
+  },
+  apiPillSuccess: {
+    backgroundColor: "#0F2A1A",
+    borderColor: "#2ECC71",
+  },
+  apiPillError: {
+    backgroundColor: "#2A1420",
+    borderColor: "#FF4757",
+  },
+  apiPillIcon: {
+    fontSize: 10,
+    fontWeight: "800",
+  },
+  apiPillText: {
+    fontSize: 9,
+    fontWeight: "700",
+    letterSpacing: 0.5,
+  },
+  apiPillTextLoading: {
+    color: "#C4BFFF",
+  },
+  apiPillTextSuccess: {
+    color: "#2ECC71",
+  },
+  apiPillTextError: {
+    color: "#FF4757",
   },
 });
