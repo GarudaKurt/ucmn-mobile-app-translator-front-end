@@ -44,6 +44,14 @@ export default function TabLayout() {
           ),
         }}
       />
+      <Tabs.Screen
+        name="phraseslist"
+        options={{
+          tabBarIcon: ({ focused }) => (
+            <TabIcon icon="📋" label="Phrases" focused={focused} />
+          ),
+        }}
+      />
     </Tabs>
   );
 }
