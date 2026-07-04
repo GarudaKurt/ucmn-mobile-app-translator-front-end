@@ -1,23 +1,31 @@
 import React from "react";
 import {
-    SafeAreaView,
-    ScrollView,
-    StatusBar,
-    StyleSheet,
-    Text,
-    View,
+  SafeAreaView,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  View,
 } from "react-native";
 
 const phrases = [
-  "Mabuti",
+  "Kamusta!",
+  "Ang pangalan ko ay si",
+  "Siya ay si",
+  "Kami ay mga",
+  "Estudyante sa UC",
+  "Mahal Kita",
+  "Pasensya",
+  "Bakit",
+  "Naiintindihan ko",
   "Ayos lang",
   "Oo",
-  "Ang pangalan ko ay si",
+  "Hindi",
   "San ka nakatira?",
   "Kamusta ka?",
   "Salamat",
-  "Siya ay si",
-  "Kamusta ka",
+  "Palakpakan",
+  "Ako",
 ];
 
 function PhraseCard({ text, index }: { text: string; index: number }) {
