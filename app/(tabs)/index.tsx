@@ -122,7 +122,7 @@ export default function HomeScreen() {
   const [transcript, setTranscript] = useState("");
   const [duration, setDuration] = useState(0);
   const pulseAnim = useRef(new Animated.Value(1)).current;
-  const API_URL = "http://192.168.254.199:5000/api/transcript"; // URL at UC Testing, duha ang ilisan na ip naa pud sa ubos apila
+  const API_URL = "http://192.168.1.13:5000/api/transcript"; // URL at UC Testing, duha ang ilisan na ip naa pud sa ubos apila
 
   // --- API status indicators ---
   // Result of the last upload/transcribe request. "loading" while the
@@ -184,7 +184,7 @@ export default function HomeScreen() {
         type: "audio/m4a",
       } as any);
       // need pud update ang upload response
-      const response = await fetch("http://192.168.254.199:5000/api/upload", {
+      const response = await fetch("http://192.168.1.13:5000/api/upload", {
         method: "POST",
         body: formData,
       });
